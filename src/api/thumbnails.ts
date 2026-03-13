@@ -3,7 +3,8 @@ import { respondWithJSON } from "./json";
 import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
-import { BadRequestError, UserForbiddenError } from "./errors";
+import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
+import { getAssetDiskPath, getAssetsURL, mediaTypeToExtension } from "./assets";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -21,20 +22,27 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   if (!(file instanceof File)) {
     throw new BadRequestError("Invalid thumbnail file");
   }
-  const maxUploadSize = 2 << 20;
+  const maxUploadSize = 10 << 20;
   if (file.size > maxUploadSize) {
     throw new BadRequestError("Thumbnail file is too large (max 10MB)");
   }
-  const fileType = file.type;
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const stringBuffer = fileBuffer.toString("base64");
-  const dataUrl = `data:${fileType};base64,${stringBuffer}`;
   const video = getVideo(cfg.db, videoId);
-  if (userID !== video?.userID) {
+  if (!video) {
+    throw new NotFoundError("Video not found");
+  }
+  if (userID !== video.userID) {
     throw new UserForbiddenError("You don't have permission to upload a thumbnail for this video");
   }
+  const fileType = file.type;
+  if (fileType !== "image/jpeg" && fileType !== "image/png") {
+    throw new BadRequestError("Invalid thumbnail file type (only JPEG and PNG are allowed)");
+  }
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const fileSuffix = mediaTypeToExtension(fileType);
+  const filePath = getAssetDiskPath(cfg, `${videoId}.${fileSuffix}`);
+  await Bun.write(filePath, fileBuffer);
 
-  video.thumbnailURL = dataUrl;
+  video.thumbnailURL = getAssetsURL(cfg, `${videoId}${fileSuffix}`);
   updateVideo(cfg.db, video);
 
   return respondWithJSON(200, video);

@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from "fs";
+import path from "path";
 
 import type { ApiConfig } from "../config";
 
@@ -8,6 +9,15 @@ export function ensureAssetsDir(cfg: ApiConfig) {
   }
 }
 
-export function getInMemoryURL(cfg: ApiConfig, assetPath: string) {
-  return `http://localhost:${cfg.port}/api/thumbnails/${assetPath}`;
+export function getAssetsURL(cfg: ApiConfig, fileName: string) {
+  return `http://localhost:${cfg.port}/assets/${fileName}`;
+}
+
+export function getAssetDiskPath(cfg: ApiConfig, fileName: string) {
+  return path.join(cfg.assetsRoot,fileName);
+}
+
+export function mediaTypeToExtension(mediaType: string) {
+  const type = mediaType.split("/")[1];
+  return `.${type}`;
 }
